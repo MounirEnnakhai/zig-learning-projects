@@ -62,3 +62,34 @@ pub fn handleCreateTask(request: *Server.Request, service: *TaskService, allocat
     try task.toJson(buffer.writer(allocator));
     try http_utils.sendJsonResponse(request, 201, buffer.items);
 }
+
+pub fn handleUpdateTask(request: *Server.Request, service: *TaskService, id: u32, allocator: std.mem.Allocator) !void {
+    var body_buf: [1024]u8 = undefined;
+    const body_reader = request.server.reader.bodyReader(
+        &body_buf,
+        request.head.transfer_encoding,
+        request.head.content_length,
+    );
+
+    var body_list = std.ArrayList(u8){};
+    defer body_list.deinit(allocator);
+    try body_reader.appendRemaining(allocator, &body_list, @enumFromInt(1024 * 1024));
+    const body = body_list.items;
+
+    const title = http_utils.parseJsonField(body, "title");
+    const description = http_utils.parseJsonField(body, "description");
+    const completed = http_utils.parseJsonField(body, "completed");
+
+    const updated = try service.updateTask(id, title, description, completed);
+    if (!updated) {
+        try http_utils.sendTextResponse(request, 404, "task not found");
+        return;
+    }
+
+    const task = service.getTask(id).?;
+    var buffer = std.ArrayList(u8){};
+    defer buffer.deinit(allocator);
+
+    try task.toJson(buffer.writer(allocator));
+    try http_utils.sendJsonResponse(request, 200, buffer.items);
+}
