@@ -93,3 +93,13 @@ pub fn handleUpdateTask(request: *Server.Request, service: *TaskService, id: u32
     try task.toJson(buffer.writer(allocator));
     try http_utils.sendJsonResponse(request, 200, buffer.items);
 }
+
+pub fn handleDeleteTask(request: *Server.Request, service: *TaskService, id: u32) !void {
+    const deleted = try service.deleteTask(id);
+
+    if (deleted) {
+        try http_utils.sendJsonResponse(request, 200, "");
+    } else {
+        try http_utils.sendTextResponse(request, 404, "task not found");
+    }
+}
