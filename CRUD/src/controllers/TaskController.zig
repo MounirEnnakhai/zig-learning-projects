@@ -22,8 +22,8 @@ pub fn handleGetAllTasks(request: *Server.Request, service: *TaskService, alloca
 }
 
 pub fn handleGetTask(request: *Server.Request, service: *TaskService, id: u32, allocator: std.mem.Allocator) !void {
-    const task = try service.getTask(id) orelse {
-        try http_utils.sendTextResponse(request, 404, "task was not found");
+    const task = service.getTask(id) orelse {
+        try http_utils.sendTextResponse(request, 404, "Task not found");
         return;
     };
 

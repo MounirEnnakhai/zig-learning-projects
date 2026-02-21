@@ -39,7 +39,7 @@ pub fn main() !void {
 
     while (true) {
         const connection = try server.accept();
-        const thread = try std.Thread.spawn(.{}, handleConnection, .{ connection, &server, allocator });
+        const thread = try std.Thread.spawn(.{}, handleConnection, .{ connection, &service, allocator });
         thread.detach();
     }
 }
@@ -60,5 +60,50 @@ fn handleConnection(connection: std.net.Server.Connection, service: *TaskService
 
     var con_reader = connection.stream.reader(read_buffer);
     var con_writer = connection.stream.writer(write_buffer);
-    var server = std.http.Server.init(con_reader, &con_writer.interface);
+    var server = std.http.Server.init(con_reader.interface(), &con_writer.interface);
+
+    var request = server.receiveHead() catch |err| {
+        std.debug.print("error receiving head: {}\n", .{err});
+        return;
+    };
+
+    handleRequest(&request, service, allocator) catch |err| {
+        std.debug.print("error: {}\n", .{err});
+    };
+}
+
+fn handleRequest(request: *std.http.Server.Request, service: *TaskService, allocator: std.mem.Allocator) !void {
+    const target = request.head.target;
+    const method = request.head.method;
+
+    std.debug.print(" {s: <7} {s}\n", .{ @tagName(method), target });
+
+    // Router
+    if (std.mem.eql(u8, target, "/tasks")) {
+        if (method == .GET) {
+            try TaskController.handleGetAllTasks(request, service, allocator);
+        } else if (method == .POST) {
+            try TaskController.handleCreateTask(request, service, allocator);
+        } else {
+            try http_utils.sendTextResponse(request, 405, "Method Not Allowed");
+        }
+    } else if (std.mem.startsWith(u8, target, "/tasks/")) {
+        const id_str = target[7..];
+        const id = std.fmt.parseInt(u32, id_str, 10) catch {
+            try http_utils.sendTextResponse(request, 400, "Invalid task ID");
+            return;
+        };
+
+        if (method == .GET) {
+            try TaskController.handleGetTask(request, service, id, allocator);
+        } else if (method == .PUT) {
+            try TaskController.handleUpdateTask(request, service, id, allocator);
+        } else if (method == .DELETE) {
+            try TaskController.handleDeleteTask(request, service, id);
+        } else {
+            try http_utils.sendTextResponse(request, 405, "Method Not Allowed");
+        }
+    } else {
+        try http_utils.sendTextResponse(request, 404, "Not Found");
+    }
 }
